@@ -1,0 +1,12 @@
+# База данных создаётся при запуске
+data/
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Системное
+.DS_Store
