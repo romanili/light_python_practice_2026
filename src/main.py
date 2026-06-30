@@ -1,14 +1,15 @@
 """Консольный индексатор папок (полный вариант практики).
 
-Этап 1 — каркас:
-- принимает путь к папке аргументом запуска;
-- проверяет, что путь существует и это папка;
-- создаёт базу SQLite со схемой индекса.
+Этап 1 — каркас: приём пути, структура проекта, схема SQLite.
+Этап 2 — сканирование: рекурсивный обход папки, сбор метаданных,
+сохранение индекса в SQLite, простые фильтры.
 
 Запуск:
     python src/main.py <путь_к_папке>
+    python src/main.py <путь_к_папке> --ext .txt
+    python src/main.py <путь_к_папке> --name отчет
 
-Следующие этапы (сканирование, дубликаты, бэкап) добавляются поверх.
+Следующие этапы (дубликаты, бэкап) добавляются поверх.
 """
 
 import argparse
@@ -16,6 +17,7 @@ import sys
 from pathlib import Path
 
 import db
+import scanner
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -26,6 +28,14 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "path",
         help="путь к папке, которую нужно проиндексировать",
+    )
+    parser.add_argument(
+        "--ext",
+        help="фильтр по расширению, например .txt",
+    )
+    parser.add_argument(
+        "--name",
+        help="фильтр: подстрока в имени файла",
     )
     return parser.parse_args(argv)
 
@@ -42,11 +52,27 @@ def main(argv=None) -> int:
         return 1
 
     # Инициализация базы при запуске утилиты.
-    db_path = db.init_db()
+    db.init_db()
 
-    print(f"Папка для индексации: {target.resolve()}")
-    print(f"База данных готова:    {db_path}")
-    print("Этап 1 (каркас): база создана, путь принят.")
+    # Сканирование и обновление индекса.
+    results, count, missing = scanner.scan(
+        target, ext=args.ext, name_contains=args.name
+    )
+
+    print(f"Папка: {target.resolve()}")
+    if args.ext:
+        print(f"Фильтр по расширению: {args.ext}")
+    if args.name:
+        print(f"Фильтр по имени: {args.name}")
+    print("-" * 60)
+
+    for rel_path, size, _ext in results:
+        print(f"{size:>12}  {rel_path}")
+
+    print("-" * 60)
+    print(f"Найдено файлов: {count}")
+    if missing:
+        print(f"Помечено как отсутствующие (исчезли из папки): {missing}")
     return 0
 
 
