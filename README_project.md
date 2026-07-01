@@ -23,6 +23,7 @@ python src/main.py ~/Documents
 python src/main.py ~/Documents --ext .txt     # только .txt
 python src/main.py ~/Documents --name отчет    # имя содержит "отчет"
 python src/main.py ~/Documents --dupes         # показать дубликаты
+python src/main.py ~/Documents --missing       # список отсутствующих файлов
 python src/main.py ~/Documents --backup ~/Backup   # сравнить с бэкапом
 ```
 

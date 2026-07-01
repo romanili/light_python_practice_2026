@@ -50,6 +50,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--backup",
         help="путь к папке резервной копии для сравнения",
     )
+    parser.add_argument(
+        "--missing",
+        action="store_true",
+        help="показать список файлов, помеченных как отсутствующие",
+    )
     return parser.parse_args(argv)
 
 
@@ -87,6 +92,9 @@ def main(argv=None) -> int:
     if missing:
         print(f"Помечено как отсутствующие (исчезли из папки): {missing}")
 
+    if args.missing:
+        print_missing()
+
     if args.dupes:
         print_duplicates(target)
 
@@ -98,6 +106,24 @@ def main(argv=None) -> int:
         print_backup(target, backup_dir)
 
     return 0
+
+
+def print_missing() -> None:
+    """Вывести список файлов, помеченных как отсутствующие."""
+    conn = db.get_connection()
+    try:
+        absent = db.list_absent(conn)
+    finally:
+        conn.close()
+
+    print("\n" + "=" * 60)
+    print(f"Отсутствующие файлы (исчезли из папки): {len(absent)}")
+    print("=" * 60)
+    if not absent:
+        print("Нет отсутствующих файлов.")
+        return
+    for rel_path in absent:
+        print(f"    {rel_path}")
 
 
 def print_duplicates(target: Path) -> None:
