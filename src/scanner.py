@@ -12,6 +12,23 @@ from pathlib import Path
 import db
 
 
+def walk(directory):
+    """Рекурсивно обойти папку своими руками и вернуть все файлы.
+
+    Перебираем содержимое папки. Для файла — отдаём его. Для вложенной папки —
+    вызываем эту же функцию для неё (проваливаемся глубже) и добавляем найденное.
+    Так рекурсия сама доходит до любой глубины вложенности.
+    """
+    files = []
+    directory = Path(directory)
+    for entry in os.scandir(directory):
+        if entry.is_dir(follow_symlinks=False):
+            files.extend(walk(entry.path))   # вызов самой себя для подпапки
+        elif entry.is_file(follow_symlinks=False):
+            files.append(Path(entry.path))
+    return files
+
+
 def normalize_ext(ext):
     """Привести расширение к виду '.txt' (с точкой, в нижнем регистре)."""
     if ext is None:
@@ -32,11 +49,8 @@ def matches(filename, ext=None, name_contains=None):
 
 
 def iter_files(root):
-    """Рекурсивно перебрать все файлы папки."""
-    root = Path(root)
-    for dirpath, _dirnames, filenames in os.walk(root):
-        for filename in filenames:
-            yield Path(dirpath) / filename
+    """Вернуть все файлы папки (обход — самописной рекурсией, см. walk)."""
+    return walk(root)
 
 
 def scan(root, ext=None, name_contains=None, db_path=db.DB_PATH):
