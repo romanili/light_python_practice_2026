@@ -137,6 +137,14 @@ def count_absent(conn: sqlite3.Connection) -> int:
     return row["n"]
 
 
+def list_absent(conn: sqlite3.Connection):
+    """Вернуть пути файлов, помеченных как отсутствующие."""
+    rows = conn.execute(
+        "SELECT rel_path FROM files WHERE present = 0 ORDER BY rel_path"
+    ).fetchall()
+    return [row["rel_path"] for row in rows]
+
+
 # --- Операции с хэшами и дубликатами (этап 3) ---
 
 def files_needing_hash(conn: sqlite3.Connection):
