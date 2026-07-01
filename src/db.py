@@ -87,13 +87,23 @@ def mark_all_absent(conn: sqlite3.Connection) -> None:
 
 def upsert_file(conn: sqlite3.Connection, rel_path: str, size: int,
                 mtime: float, ext: str) -> None:
-    """Добавить новый файл в индекс или обновить существующий."""
+    """Добавить новый файл в индекс или обновить существующий.
+
+    Если у существующего файла изменились размер или время изменения, его хэш
+    сбрасывается в NULL — значит содержимое могло поменяться и хэш надо
+    пересчитать. Если файл не менялся, сохранённый хэш переиспользуется.
+    """
     now = time.time()
     conn.execute(
         """
         INSERT INTO files (rel_path, size, mtime, ext, present, updated_at)
         VALUES (?, ?, ?, ?, 1, ?)
         ON CONFLICT(rel_path) DO UPDATE SET
+            hash = CASE
+                WHEN files.size != excluded.size OR files.mtime != excluded.mtime
+                THEN NULL
+                ELSE files.hash
+            END,
             size       = excluded.size,
             mtime      = excluded.mtime,
             ext        = excluded.ext,
@@ -108,3 +118,46 @@ def count_absent(conn: sqlite3.Connection) -> int:
     """Сколько файлов помечено как отсутствующие после сканирования."""
     row = conn.execute("SELECT COUNT(*) AS n FROM files WHERE present = 0").fetchone()
     return row["n"]
+
+
+# --- Операции с хэшами и дубликатами (этап 3) ---
+
+def files_needing_hash(conn: sqlite3.Connection):
+    """Вернуть присутствующие файлы, у которых ещё нет хэша."""
+    return conn.execute(
+        "SELECT rel_path FROM files WHERE present = 1 AND hash IS NULL"
+    ).fetchall()
+
+
+def set_hash(conn: sqlite3.Connection, rel_path: str, file_hash: str) -> None:
+    """Сохранить хэш файла в индексе."""
+    conn.execute(
+        "UPDATE files SET hash = ? WHERE rel_path = ?",
+        (file_hash, rel_path),
+    )
+
+
+def find_duplicates(conn: sqlite3.Connection):
+    """Вернуть группы дубликатов: {hash: [rel_path, ...]} для 2+ файлов.
+
+    Учитываются только присутствующие файлы с посчитанным хэшем.
+    """
+    rows = conn.execute(
+        """
+        SELECT hash, rel_path, size
+        FROM files
+        WHERE present = 1 AND hash IS NOT NULL
+          AND hash IN (
+              SELECT hash FROM files
+              WHERE present = 1 AND hash IS NOT NULL
+              GROUP BY hash
+              HAVING COUNT(*) > 1
+          )
+        ORDER BY hash, rel_path
+        """
+    ).fetchall()
+
+    groups = {}
+    for row in rows:
+        groups.setdefault(row["hash"], []).append((row["rel_path"], row["size"]))
+    return groups
