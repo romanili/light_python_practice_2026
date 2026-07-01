@@ -4,20 +4,21 @@
 Этап 2 — сканирование: рекурсивный обход папки, сбор метаданных,
 сохранение индекса в SQLite, простые фильтры.
 Этап 3 — дубликаты: подсчёт хэшей и поиск файлов с одинаковым содержимым.
+Этап 4 — резервная копия: сравнение папки с бэкапом и отчёт о различиях.
 
 Запуск:
     python src/main.py <путь_к_папке>
     python src/main.py <путь_к_папке> --ext .txt
     python src/main.py <путь_к_папке> --name отчет
     python src/main.py <путь_к_папке> --dupes
-
-Следующий этап (бэкап) добавляется поверх.
+    python src/main.py <путь_к_папке> --backup <путь_к_бэкапу>
 """
 
 import argparse
 import sys
 from pathlib import Path
 
+import backup
 import db
 import duplicates
 import scanner
@@ -44,6 +45,10 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--dupes",
         action="store_true",
         help="посчитать хэши и показать группы дубликатов",
+    )
+    parser.add_argument(
+        "--backup",
+        help="путь к папке резервной копии для сравнения",
     )
     return parser.parse_args(argv)
 
@@ -85,6 +90,13 @@ def main(argv=None) -> int:
     if args.dupes:
         print_duplicates(target)
 
+    if args.backup:
+        backup_dir = Path(args.backup).expanduser()
+        if not backup_dir.is_dir():
+            print(f"Ошибка: папка бэкапа не найдена: {backup_dir}", file=sys.stderr)
+            return 1
+        print_backup(target, backup_dir)
+
     return 0
 
 
@@ -106,6 +118,30 @@ def print_duplicates(target: Path) -> None:
         print(f"\nГруппа {i} — {len(items)} файла(ов), {size} байт, hash {file_hash[:12]}…")
         for rel_path, _size in items:
             print(f"    {rel_path}")
+
+
+def print_backup(source: Path, backup_dir: Path) -> None:
+    """Сравнить папку с бэкапом, вывести отчёт и сохранить результат."""
+    result, check_id = backup.run(source, backup_dir)
+
+    print("\n" + "=" * 60)
+    print("Сравнение с резервной копией")
+    print(f"  исходная папка: {source.resolve()}")
+    print(f"  бэкап:          {backup_dir.resolve()}")
+    print("=" * 60)
+
+    sections = [
+        ("Нет в бэкапе (не забэкаплены)", result["missing"]),
+        ("Отличаются (изменены)", result["changed"]),
+        ("Лишние в бэкапе", result["extra"]),
+    ]
+    for title, items in sections:
+        print(f"\n{title}: {len(items)}")
+        for rel_path in items:
+            print(f"    {rel_path}")
+
+    print(f"\nСовпадают: {len(result['same'])}")
+    print(f"\nРезультат проверки сохранён в БД (проверка #{check_id}).")
 
 
 if __name__ == "__main__":
