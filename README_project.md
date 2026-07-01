@@ -23,6 +23,7 @@ python src/main.py ~/Documents
 python src/main.py ~/Documents --ext .txt     # только .txt
 python src/main.py ~/Documents --name отчет    # имя содержит "отчет"
 python src/main.py ~/Documents --dupes         # показать дубликаты
+python src/main.py ~/Documents --backup ~/Backup   # сравнить с бэкапом
 ```
 
 При запуске создаётся база `data/app.db` (если её ещё нет), папка сканируется,
@@ -37,7 +38,7 @@ python src/main.py ~/Documents --dupes         # показать дублика
 1. **Каркас** — приём пути, структура проекта, схема SQLite. ✅
 2. **Сканирование** — рекурсивный обход, сбор метаданных, сохранение индекса, фильтры. ✅
 3. **Дубликаты** — хэширование файлов (sha256), поиск повторов. ✅
-4. **Резервная копия** — сравнение папки с бэкапом, отчёт о различиях.
+4. **Резервная копия** — сравнение папки с бэкапом, отчёт о различиях. ✅
 
 ## Структура
 
@@ -48,6 +49,7 @@ src/
   scanner.py        рекурсивный обход папки и обновление индекса
   hasher.py         подсчёт sha256 по содержимому файла
   duplicates.py     досчёт хэшей и группировка дубликатов
+  backup.py         сравнение папки с резервной копией
   student_meta.md   метаинформация студента
 data/
   app.db            база (создаётся автоматически, в git не хранится)
@@ -57,4 +59,6 @@ JOURNAL.md          журнал работ
 ## Схема базы
 
 - `files` — текущий индекс: `rel_path`, `size`, `mtime`, `ext`, `hash`, `present`, `updated_at`.
-- `scans` — история запусков: `root_path`, `started_at`, `finished_at`, `files_count`.
+- `scans` — история сканирований: `root_path`, `started_at`, `finished_at`, `files_count`.
+- `backup_checks` — история проверок бэкапа: пути, время, счётчики различий.
+- `backup_diffs` — детали проверки: `rel_path` и `status` (`missing`/`changed`/`extra`).
