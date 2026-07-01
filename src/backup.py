@@ -18,19 +18,32 @@ import db
 import hasher
 
 
+def walk(directory):
+    """Рекурсивно обойти папку своими руками и вернуть все файлы.
+
+    Для вложенной папки функция вызывает саму себя (проваливается глубже),
+    для файла — добавляет его в список. Так обход доходит до любой вложенности.
+    """
+    files = []
+    for entry in os.scandir(directory):
+        if entry.is_dir(follow_symlinks=False):
+            files.extend(walk(entry.path))   # вызов самой себя для подпапки
+        elif entry.is_file(follow_symlinks=False):
+            files.append(Path(entry.path))
+    return files
+
+
 def snapshot(root):
     """Собрать снимок папки: {rel_path: (size, full_path)}."""
     root = Path(root).resolve()
     result = {}
-    for dirpath, _dirnames, filenames in os.walk(root):
-        for filename in filenames:
-            full_path = Path(dirpath) / filename
-            try:
-                size = full_path.stat().st_size
-            except OSError:
-                continue
-            rel_path = str(full_path.relative_to(root))
-            result[rel_path] = (size, full_path)
+    for full_path in walk(root):
+        try:
+            size = full_path.stat().st_size
+        except OSError:
+            continue
+        rel_path = str(full_path.relative_to(root))
+        result[rel_path] = (size, full_path)
     return result
 
 
