@@ -35,6 +35,23 @@ CREATE TABLE IF NOT EXISTS scans (
     finished_at REAL,           -- когда закончили
     files_count INTEGER         -- сколько файлов найдено
 );
+
+CREATE TABLE IF NOT EXISTS backup_checks (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_path   TEXT,    -- исходная папка
+    backup_path   TEXT,    -- папка резервной копии
+    checked_at    REAL,    -- когда проверяли
+    missing_count INTEGER, -- нет в бэкапе
+    changed_count INTEGER, -- отличается
+    extra_count   INTEGER  -- лишнее в бэкапе
+);
+
+CREATE TABLE IF NOT EXISTS backup_diffs (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_id INTEGER NOT NULL,  -- ссылка на backup_checks.id
+    rel_path TEXT NOT NULL,     -- путь файла
+    status   TEXT NOT NULL      -- 'missing' | 'changed' | 'extra'
+);
 """
 
 
@@ -161,3 +178,35 @@ def find_duplicates(conn: sqlite3.Connection):
     for row in rows:
         groups.setdefault(row["hash"], []).append((row["rel_path"], row["size"]))
     return groups
+
+
+# --- Проверка резервной копии (этап 4) ---
+
+def save_backup_check(conn: sqlite3.Connection, source_path: str,
+                      backup_path: str, missing, changed, extra) -> int:
+    """Сохранить результат сравнения с бэкапом и его детали.
+
+    Возвращает id записи проверки.
+    """
+    cur = conn.execute(
+        """
+        INSERT INTO backup_checks
+            (source_path, backup_path, checked_at,
+             missing_count, changed_count, extra_count)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (source_path, backup_path, time.time(),
+         len(missing), len(changed), len(extra)),
+    )
+    check_id = cur.lastrowid
+
+    rows = (
+        [(check_id, rel, "missing") for rel in missing]
+        + [(check_id, rel, "changed") for rel in changed]
+        + [(check_id, rel, "extra") for rel in extra]
+    )
+    conn.executemany(
+        "INSERT INTO backup_diffs (check_id, rel_path, status) VALUES (?, ?, ?)",
+        rows,
+    )
+    return check_id
