@@ -3,13 +3,15 @@
 Этап 1 — каркас: приём пути, структура проекта, схема SQLite.
 Этап 2 — сканирование: рекурсивный обход папки, сбор метаданных,
 сохранение индекса в SQLite, простые фильтры.
+Этап 3 — дубликаты: подсчёт хэшей и поиск файлов с одинаковым содержимым.
 
 Запуск:
     python src/main.py <путь_к_папке>
     python src/main.py <путь_к_папке> --ext .txt
     python src/main.py <путь_к_папке> --name отчет
+    python src/main.py <путь_к_папке> --dupes
 
-Следующие этапы (дубликаты, бэкап) добавляются поверх.
+Следующий этап (бэкап) добавляется поверх.
 """
 
 import argparse
@@ -17,6 +19,7 @@ import sys
 from pathlib import Path
 
 import db
+import duplicates
 import scanner
 
 
@@ -36,6 +39,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--name",
         help="фильтр: подстрока в имени файла",
+    )
+    parser.add_argument(
+        "--dupes",
+        action="store_true",
+        help="посчитать хэши и показать группы дубликатов",
     )
     return parser.parse_args(argv)
 
@@ -73,7 +81,31 @@ def main(argv=None) -> int:
     print(f"Найдено файлов: {count}")
     if missing:
         print(f"Помечено как отсутствующие (исчезли из папки): {missing}")
+
+    if args.dupes:
+        print_duplicates(target)
+
     return 0
+
+
+def print_duplicates(target: Path) -> None:
+    """Посчитать хэши и вывести группы дубликатов."""
+    computed = duplicates.update_hashes(target)
+    groups = duplicates.find()
+
+    print("\n" + "=" * 60)
+    print(f"Поиск дубликатов (посчитано новых хэшей: {computed})")
+    print("=" * 60)
+
+    if not groups:
+        print("Дубликатов не найдено.")
+        return
+
+    for i, (file_hash, items) in enumerate(groups.items(), start=1):
+        size = items[0][1]
+        print(f"\nГруппа {i} — {len(items)} файла(ов), {size} байт, hash {file_hash[:12]}…")
+        for rel_path, _size in items:
+            print(f"    {rel_path}")
 
 
 if __name__ == "__main__":
