@@ -103,7 +103,7 @@ def main(argv=None) -> int:
         if not backup_dir.is_dir():
             print(f"Ошибка: папка бэкапа не найдена: {backup_dir}", file=sys.stderr)
             return 1
-        print_backup(target, backup_dir)
+        print_backup(target, backup_dir, ext=args.ext, name_contains=args.name)
 
     return 0
 
@@ -146,14 +146,18 @@ def print_duplicates(target: Path) -> None:
             print(f"    {rel_path}")
 
 
-def print_backup(source: Path, backup_dir: Path) -> None:
+def print_backup(source: Path, backup_dir: Path, ext=None, name_contains=None) -> None:
     """Сравнить папку с бэкапом, вывести отчёт и сохранить результат."""
-    result, check_id = backup.run(source, backup_dir)
+    result, check_id = backup.run(source, backup_dir, ext=ext, name_contains=name_contains)
 
     print("\n" + "=" * 60)
     print("Сравнение с резервной копией")
     print(f"  исходная папка: {source.resolve()}")
     print(f"  бэкап:          {backup_dir.resolve()}")
+    if ext:
+        print(f"  фильтр по расширению: {ext}")
+    if name_contains:
+        print(f"  фильтр по имени: {name_contains}")
     print("=" * 60)
 
     sections = [
