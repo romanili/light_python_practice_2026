@@ -16,6 +16,7 @@ from pathlib import Path
 
 import db
 import hasher
+import scanner
 
 
 def walk(directory):
@@ -33,11 +34,16 @@ def walk(directory):
     return files
 
 
-def snapshot(root):
-    """Собрать снимок папки: {rel_path: (size, full_path)}."""
+def snapshot(root, ext=None, name_contains=None):
+    """Собрать снимок папки: {rel_path: (size, full_path)}.
+
+    Если заданы фильтры, в снимок попадают только подходящие файлы.
+    """
     root = Path(root).resolve()
     result = {}
     for full_path in walk(root):
+        if not scanner.matches(full_path.name, ext, name_contains):
+            continue
         try:
             size = full_path.stat().st_size
         except OSError:
@@ -47,14 +53,20 @@ def snapshot(root):
     return result
 
 
-def compare(source, backup):
+def compare(source, backup, ext=None, name_contains=None):
     """Сравнить исходную папку с бэкапом.
+
+    Фильтры ext/name_contains ограничивают сравнение только подходящими
+    файлами (и в исходной папке, и в бэкапе).
 
     Возвращает словарь со списками missing, changed, extra, same
     (каждый — отсортированный список относительных путей).
     """
-    src = snapshot(source)
-    bak = snapshot(backup)
+    ext = scanner.normalize_ext(ext)
+    name_contains = name_contains.lower() if name_contains else None
+
+    src = snapshot(source, ext, name_contains)
+    bak = snapshot(backup, ext, name_contains)
 
     missing, changed, same = [], [], []
     for rel_path, (size, full_path) in src.items():
@@ -79,9 +91,9 @@ def compare(source, backup):
     }
 
 
-def run(source, backup, db_path=db.DB_PATH):
+def run(source, backup, ext=None, name_contains=None, db_path=db.DB_PATH):
     """Сравнить папки, сохранить результат в БД и вернуть (result, check_id)."""
-    result = compare(source, backup)
+    result = compare(source, backup, ext=ext, name_contains=name_contains)
     conn = db.get_connection(db_path)
     try:
         check_id = db.save_backup_check(
